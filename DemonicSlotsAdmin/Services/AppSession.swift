@@ -8,6 +8,7 @@
 //  RootView only ever has to switch on `state`.
 //
 
+import Combine
 import Foundation
 
 @MainActor
