@@ -30,16 +30,21 @@ final class AppSession: ObservableObject {
     private let makeClient: (URL, String) -> AdminAPIClientProtocol
     private var cachedInitialPlayers: [Player]?
 
+    /// Default values for `keychain`/`biometrics`/`makeClient` construct
+    /// @MainActor-isolated types, so they can't live as default *parameter*
+    /// expressions (those are evaluated in a nonisolated generator context) —
+    /// they're resolved here in the init body instead, which does run on
+    /// the main actor.
     init(
         settings: AppSettings,
-        keychain: KeychainServicing = KeychainService(),
-        biometrics: BiometricAuthService = BiometricAuthService(),
-        makeClient: @escaping (URL, String) -> AdminAPIClientProtocol = { APIClient(baseURL: $0, token: $1) }
+        keychain: KeychainServicing? = nil,
+        biometrics: BiometricAuthService? = nil,
+        makeClient: (@escaping (URL, String) -> AdminAPIClientProtocol)? = nil
     ) {
         self.settings = settings
-        self.keychain = keychain
-        self.biometrics = biometrics
-        self.makeClient = makeClient
+        self.keychain = keychain ?? KeychainService()
+        self.biometrics = biometrics ?? BiometricAuthService()
+        self.makeClient = makeClient ?? { APIClient(baseURL: $0, token: $1) }
     }
 
     var currentBackendURLString: String { settings.backendURLString }
