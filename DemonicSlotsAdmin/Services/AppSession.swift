@@ -39,7 +39,7 @@ final class AppSession: ObservableObject {
         settings: AppSettings,
         keychain: KeychainServicing? = nil,
         biometrics: BiometricAuthService? = nil,
-        makeClient: (@escaping (URL, String) -> AdminAPIClientProtocol)? = nil
+        makeClient: ((URL, String) -> AdminAPIClientProtocol)? = nil
     ) {
         self.settings = settings
         self.keychain = keychain ?? KeychainService()
