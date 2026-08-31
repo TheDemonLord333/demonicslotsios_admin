@@ -3,25 +3,28 @@
 //  DemonicSlotsAdmin
 //
 //  Builds the `/api/admin/...` paths used by APIClient. Kept as a pure,
-//  network-free type so path construction and username percent-encoding
-//  are independently unit-testable.
+//  network-free type so path construction and id percent-encoding are
+//  independently unit-testable.
 //
 
 import Foundation
 
 enum AdminEndpoint: Equatable {
     case players
-    case player(username: String)
-    case updateBalance(username: String)
+    case player(id: String)
+    case updateBalance(id: String)
+    case renameUsername(id: String)
 
     var path: String {
         switch self {
         case .players:
             return "/api/admin/players"
-        case .player(let username):
-            return "/api/admin/players/\(PathEncoding.encodeComponent(username))"
-        case .updateBalance(let username):
-            return "/api/admin/players/\(PathEncoding.encodeComponent(username))/balance"
+        case .player(let id):
+            return "/api/admin/players/\(PathEncoding.encodeComponent(id))"
+        case .updateBalance(let id):
+            return "/api/admin/players/\(PathEncoding.encodeComponent(id))/balance"
+        case .renameUsername(let id):
+            return "/api/admin/players/\(PathEncoding.encodeComponent(id))/username"
         }
     }
 
@@ -29,14 +32,14 @@ enum AdminEndpoint: Equatable {
         switch self {
         case .players, .player:
             return "GET"
-        case .updateBalance:
+        case .updateBalance, .renameUsername:
             return "PATCH"
         }
     }
 }
 
 /// Percent-encodes a single path component the same way JavaScript's
-/// `encodeURIComponent` does, so usernames containing spaces, slashes,
+/// `encodeURIComponent` does, so ids/usernames containing spaces, slashes,
 /// `@`, `+`, `&`, `=`, etc. are always safely embedded in the URL path.
 enum PathEncoding {
     private static let unreservedCharacters: CharacterSet = {

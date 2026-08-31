@@ -2,6 +2,10 @@
 //  PlayerDetailViewModel.swift
 //  DemonicSlotsAdmin
 //
+//  Username and balance are edited together in one form but saved as
+//  independent PATCH requests (per demonicslotsweb_admin's behavior):
+//  only the endpoints for fields that actually changed are called.
+//
 
 import Combine
 import Foundation
@@ -10,10 +14,12 @@ import Foundation
 final class PlayerDetailViewModel: ObservableObject {
     struct PendingChange: Identifiable {
         let id = UUID()
-        let newBalance: Int
+        let newUsername: String?
+        let newBalance: Int?
     }
 
     @Published private(set) var player: Player
+    @Published var usernameInput: String
     @Published var balanceInput: String
     @Published private(set) var isSaving = false
     @Published var errorMessage: String?
@@ -31,30 +37,55 @@ final class PlayerDetailViewModel: ObservableObject {
         onUpdated: @escaping (Player) -> Void
     ) {
         self.player = player
+        self.usernameInput = player.username
         self.balanceInput = String(player.coinBalance)
         self.client = client
         self.onUnauthorized = onUnauthorized
         self.onUpdated = onUpdated
     }
 
+    var validatedUsername: String? {
+        UsernameValidator.validate(usernameInput)
+    }
+
     var validatedBalance: Int? {
         BalanceValidator.validate(balanceInput)
     }
 
+    private var usernameDidChange: Bool {
+        guard let validatedUsername else { return false }
+        return validatedUsername != player.username
+    }
+
+    private var balanceDidChange: Bool {
+        guard let validatedBalance else { return false }
+        return validatedBalance != player.coinBalance
+    }
+
+    /// Both fields must currently be valid (even the untouched one) and at
+    /// least one of them must actually differ from the saved player.
     var canSubmit: Bool {
-        validatedBalance != nil && !isSaving
+        guard !isSaving, validatedUsername != nil, validatedBalance != nil else { return false }
+        return usernameDidChange || balanceDidChange
     }
 
     /// Step 1: validate, then surface a native confirmation dialog before
-    /// actually sending the PATCH request.
+    /// actually sending any request. Only the fields that changed end up
+    /// in `PendingChange` — an unchanged, still-valid field is left out.
     func requestConfirmation() {
         errorMessage = nil
         successMessage = nil
-        guard let value = validatedBalance else {
-            errorMessage = "Bitte eine gültige, nicht-negative ganze Zahl eingeben."
+
+        guard let validatedUsername, let validatedBalance else {
+            errorMessage = "Bitte einen gültigen Username (3–20 Zeichen: Buchstaben, Zahlen, „_“) und ein gültiges, nicht-negatives Guthaben angeben."
             return
         }
-        pendingConfirmation = PendingChange(newBalance: value)
+
+        let newUsername = validatedUsername != player.username ? validatedUsername : nil
+        let newBalance = validatedBalance != player.coinBalance ? validatedBalance : nil
+        guard newUsername != nil || newBalance != nil else { return }
+
+        pendingConfirmation = PendingChange(newUsername: newUsername, newBalance: newBalance)
     }
 
     func cancelConfirmation() {
@@ -67,39 +98,65 @@ final class PlayerDetailViewModel: ObservableObject {
     /// `pendingConfirmation` here: SwiftUI clears `isPresented` — and thus
     /// `pendingConfirmation`, via `cancelConfirmation()` — as soon as any
     /// dialog button is tapped, which can race ahead of this `async` call
-    /// and would otherwise find it already `nil`. Returns `true` on
+    /// and would otherwise find it already `nil`. Returns `true` on full
     /// success so the caller can trigger haptic feedback.
     @discardableResult
     func confirmSave(_ pending: PendingChange) async -> Bool {
-        pendingConfirmation = nil
-        return await save(newBalance: pending.newBalance)
-    }
-
-    private func save(newBalance: Int) async -> Bool {
         guard !isSaving else { return false }
         isSaving = true
         errorMessage = nil
         successMessage = nil
+        pendingConfirmation = nil
         defer { isSaving = false }
 
+        // Only the endpoints for fields that actually changed are called,
+        // and each successfully-applied step is kept even if a later one
+        // fails — so a rename that succeeds isn't silently reverted just
+        // because the balance PATCH afterwards failed.
+        var latest = player
         do {
-            let updated = try await client.updateBalance(username: player.username, balance: newBalance)
-            player = updated
-            balanceInput = String(updated.coinBalance)
-            successMessage = "Guthaben von „\(updated.username)“ auf \(DemonicFormatters.formatCoins(updated.coinBalance)) Coins gesetzt."
-            onUpdated(updated)
+            if let newUsername = pending.newUsername {
+                latest = try await client.renameUsername(id: latest.id, newUsername: newUsername)
+                apply(latest)
+            }
+            if let newBalance = pending.newBalance {
+                latest = try await client.updateBalance(id: latest.id, balance: newBalance)
+                apply(latest)
+            }
+            successMessage = Self.successMessage(for: pending, updated: latest)
+            onUpdated(latest)
             return true
         } catch let error as APIError {
             if error == .unauthorized {
                 onUnauthorized()
             } else {
-                // Keep the previous player data — only surface the error.
                 errorMessage = error.errorDescription
+                onUpdated(latest)
             }
             return false
         } catch {
             errorMessage = "Unbekannter Fehler."
+            onUpdated(latest)
             return false
+        }
+    }
+
+    private func apply(_ updated: Player) {
+        player = updated
+        usernameInput = updated.username
+        balanceInput = String(updated.coinBalance)
+    }
+
+    private static func successMessage(for pending: PendingChange, updated: Player) -> String {
+        switch (pending.newUsername, pending.newBalance) {
+        case (.some, .some):
+            return "Spieler „\(updated.username)“ aktualisiert: \(DemonicFormatters.formatCoins(updated.coinBalance)) Coins."
+        case (.some, nil):
+            return "Username erfolgreich zu „\(updated.username)“ geändert."
+        case (nil, .some):
+            return "Guthaben von „\(updated.username)“ auf \(DemonicFormatters.formatCoins(updated.coinBalance)) Coins gesetzt."
+        case (nil, nil):
+            return "Keine Änderungen."
         }
     }
 }

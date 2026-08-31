@@ -8,7 +8,11 @@ import UIKit
 
 struct PlayerDetailView: View {
     @StateObject private var viewModel: PlayerDetailViewModel
-    @FocusState private var balanceFieldFocused: Bool
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case username, balance
+    }
 
     init(
         player: Player,
@@ -78,11 +82,22 @@ struct PlayerDetailView: View {
         )
     }
 
+    /// Describes whichever field(s) actually changed — username, balance,
+    /// or both — in one natural German sentence.
     private var confirmationTitle: String {
         guard let pending = viewModel.pendingConfirmation else { return "" }
-        return "Möchtest du das Guthaben von „\(viewModel.player.username)“ wirklich von "
-            + "\(DemonicFormatters.formatCoins(viewModel.player.coinBalance)) auf "
-            + "\(DemonicFormatters.formatCoins(pending.newBalance)) Coins ändern?"
+
+        var parts: [String] = []
+        if let newUsername = pending.newUsername {
+            parts.append("den Username von „\(viewModel.player.username)“ zu „\(newUsername)“")
+        }
+        if let newBalance = pending.newBalance {
+            parts.append(
+                "das Guthaben von \(DemonicFormatters.formatCoins(viewModel.player.coinBalance)) "
+                    + "auf \(DemonicFormatters.formatCoins(newBalance)) Coins"
+            )
+        }
+        return "Möchtest du \(parts.joined(separator: " und ")) wirklich ändern?"
     }
 
     private var summaryCard: some View {
@@ -123,32 +138,50 @@ struct PlayerDetailView: View {
 
     private var editCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Neues Guthaben")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(DemonicPalette.boneIvory.opacity(0.7))
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Username")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DemonicPalette.boneIvory.opacity(0.7))
+                TextField("Username", text: $viewModel.usernameInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focusedField, equals: .username)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .balance }
+                    .demonicField(isFocused: focusedField == .username)
+                    .accessibilityLabel("Username")
+                Text("3–20 Zeichen: Buchstaben, Zahlen, „_“.")
+                    .font(.caption2)
+                    .foregroundStyle(DemonicPalette.boneIvory.opacity(0.5))
+            }
 
-            TextField("Guthaben", text: $viewModel.balanceInput)
-                .keyboardType(.numberPad)
-                .focused($balanceFieldFocused)
-                .demonicField(isFocused: balanceFieldFocused)
-                .accessibilityLabel("Neues Guthaben in Coins")
-                .onChange(of: viewModel.balanceInput) { _, newValue in
-                    let filtered = newValue.filter { $0.isASCII && $0.isNumber }
-                    if filtered != newValue {
-                        viewModel.balanceInput = filtered
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Neues Guthaben")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DemonicPalette.boneIvory.opacity(0.7))
+                TextField("Guthaben", text: $viewModel.balanceInput)
+                    .keyboardType(.numberPad)
+                    .focused($focusedField, equals: .balance)
+                    .demonicField(isFocused: focusedField == .balance)
+                    .accessibilityLabel("Neues Guthaben in Coins")
+                    .onChange(of: viewModel.balanceInput) { _, newValue in
+                        let filtered = newValue.filter { $0.isASCII && $0.isNumber }
+                        if filtered != newValue {
+                            viewModel.balanceInput = filtered
+                        }
                     }
-                }
+            }
 
             if let errorMessage = viewModel.errorMessage {
                 ErrorBanner(message: errorMessage)
             }
 
             DemonicButton(
-                title: "Guthaben speichern",
+                title: "Speichern",
                 isLoading: viewModel.isSaving,
                 isDisabled: !viewModel.canSubmit
             ) {
-                balanceFieldFocused = false
+                focusedField = nil
                 viewModel.requestConfirmation()
             }
         }

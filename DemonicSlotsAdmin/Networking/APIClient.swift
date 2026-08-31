@@ -5,7 +5,8 @@
 //  Thin native URLSession client for the Demonic Slots admin API. The
 //  backend and its contract are unchanged (see demonicslotsweb_admin's
 //  js/api.js for the reference implementation) — this is purely a native
-//  re-implementation of the same three endpoints.
+//  re-implementation of the same endpoints. Players are addressed by
+//  their stable `id`; `username` is just a renameable label.
 //
 
 import Foundation
@@ -14,8 +15,9 @@ import Foundation
 /// against a mock instead of the network.
 protocol AdminAPIClientProtocol {
     func fetchPlayers() async throws -> [Player]
-    func fetchPlayer(username: String) async throws -> Player
-    func updateBalance(username: String, balance: Int) async throws -> Player
+    func fetchPlayer(id: String) async throws -> Player
+    func updateBalance(id: String, balance: Int) async throws -> Player
+    func renameUsername(id: String, newUsername: String) async throws -> Player
 }
 
 @MainActor
@@ -38,13 +40,18 @@ final class APIClient: AdminAPIClientProtocol {
         try await send(.players, body: Optional<Data>.none)
     }
 
-    func fetchPlayer(username: String) async throws -> Player {
-        try await send(.player(username: username), body: Optional<Data>.none)
+    func fetchPlayer(id: String) async throws -> Player {
+        try await send(.player(id: id), body: Optional<Data>.none)
     }
 
-    func updateBalance(username: String, balance: Int) async throws -> Player {
+    func updateBalance(id: String, balance: Int) async throws -> Player {
         let payload = try JSONEncoder().encode(["balance": balance])
-        return try await send(.updateBalance(username: username), body: payload)
+        return try await send(.updateBalance(id: id), body: payload)
+    }
+
+    func renameUsername(id: String, newUsername: String) async throws -> Player {
+        let payload = try JSONEncoder().encode(["username": newUsername])
+        return try await send(.renameUsername(id: id), body: payload)
     }
 
     // MARK: - Request plumbing
@@ -81,6 +88,14 @@ final class APIClient: AdminAPIClientProtocol {
         }
     }
 
+    /// Maps a backend `error` code (400/409 body: `{"error": "..."}`) to a
+    /// friendly German message. Matches demonicslotsweb_admin's js/api.js.
+    private static let validationMessages: [String: String] = [
+        "invalid_username": "Ungültiger Username (3–20 Zeichen: Buchstaben, Zahlen, „_“).",
+        "username_taken": "Dieser Username ist bereits vergeben.",
+        "invalid_balance": "Ungültiges Guthaben.",
+    ]
+
     private static func validate(status: Int, data: Data) throws {
         switch status {
         case 200...299:
@@ -89,16 +104,19 @@ final class APIClient: AdminAPIClientProtocol {
             throw APIError.unauthorized
         case 404:
             throw APIError.playerNotFound
-        case 400, 422:
-            throw APIError.validation(message: serverMessage(from: data) ?? "Ungültige Eingabe.")
+        case 400, 409:
+            let code = serverErrorCode(from: data)
+            let message = code.flatMap { validationMessages[$0] }
+                ?? "Ungültige Anfrage\(code.map { " (\($0))" } ?? "")."
+            throw APIError.validation(message: message)
         case 500...599:
-            throw APIError.serverError(message: serverMessage(from: data))
+            throw APIError.serverError(message: serverErrorCode(from: data))
         default:
             throw APIError.unknownStatus(status)
         }
     }
 
-    private static func serverMessage(from data: Data) -> String? {
+    private static func serverErrorCode(from data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }

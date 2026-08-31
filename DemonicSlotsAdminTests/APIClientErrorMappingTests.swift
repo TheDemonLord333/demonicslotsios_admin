@@ -2,7 +2,8 @@
 //  APIClientErrorMappingTests.swift
 //  DemonicSlotsAdminTests
 //
-//  HTTP status code -> APIError mapping for 401 / 404 / 500.
+//  HTTP status code -> APIError mapping for 401 / 404 / 409 / 500, and
+//  the 400/409 validation error-code -> German message mapping.
 //
 
 import Testing
@@ -36,10 +37,58 @@ struct APIClientErrorMappingTests {
     @Test func status404MapsToPlayerNotFound() async throws {
         let client = makeClient(status: 404)
         do {
-            _ = try await client.fetchPlayer(username: "ghost")
+            _ = try await client.fetchPlayer(id: "ghost")
             Issue.record("Expected error to be thrown")
         } catch let error as APIError {
             #expect(error == .playerNotFound)
+        }
+    }
+
+    @Test func status400WithInvalidUsernameMapsToFriendlyMessage() async throws {
+        let body = #"{"error":"invalid_username"}"#.data(using: .utf8)!
+        let client = makeClient(status: 400, body: body)
+        do {
+            _ = try await client.renameUsername(id: "player-1", newUsername: "!!")
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            #expect(error == .validation(message: "Ungültiger Username (3–20 Zeichen: Buchstaben, Zahlen, „_“)."))
+        }
+    }
+
+    @Test func status400WithInvalidBalanceMapsToFriendlyMessage() async throws {
+        let body = #"{"error":"invalid_balance"}"#.data(using: .utf8)!
+        let client = makeClient(status: 400, body: body)
+        do {
+            _ = try await client.updateBalance(id: "player-1", balance: -1)
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            #expect(error == .validation(message: "Ungültiges Guthaben."))
+        }
+    }
+
+    @Test func status409WithUsernameTakenMapsToFriendlyMessage() async throws {
+        let body = #"{"error":"username_taken"}"#.data(using: .utf8)!
+        let client = makeClient(status: 409, body: body)
+        do {
+            _ = try await client.renameUsername(id: "player-1", newUsername: "Taken")
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            #expect(error == .validation(message: "Dieser Username ist bereits vergeben."))
+        }
+    }
+
+    @Test func status400WithUnknownCodeFallsBackToGenericMessage() async throws {
+        let body = #"{"error":"something_else"}"#.data(using: .utf8)!
+        let client = makeClient(status: 400, body: body)
+        do {
+            _ = try await client.fetchPlayers()
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            guard case .validation(let message) = error else {
+                Issue.record("Expected .validation, got \(error)")
+                return
+            }
+            #expect(message.contains("something_else"))
         }
     }
 

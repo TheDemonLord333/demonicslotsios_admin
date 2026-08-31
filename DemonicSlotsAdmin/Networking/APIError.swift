@@ -15,9 +15,10 @@ enum APIError: Error, Equatable {
     case network(String)
     /// HTTP 401 — missing or invalid admin token.
     case unauthorized
-    /// HTTP 404 — the requested player does not exist.
+    /// HTTP 404 — the requested player does not exist (or was deleted since).
     case playerNotFound
-    /// HTTP 400/422 — the server rejected the request body (e.g. negative balance).
+    /// HTTP 400/409 — the server rejected the request body (invalid/taken
+    /// username, invalid balance, …).
     case validation(message: String)
     /// HTTP 5xx.
     case serverError(message: String?)
@@ -39,7 +40,7 @@ extension APIError: LocalizedError {
         case .unauthorized:
             return "Ungültiger oder abgelaufener Admin-Token."
         case .playerNotFound:
-            return "Spieler wurde nicht gefunden."
+            return "Spieler wurde nicht gefunden (evtl. wurde er zwischenzeitlich gelöscht)."
         case .validation(let message):
             return message
         case .serverError(let message):

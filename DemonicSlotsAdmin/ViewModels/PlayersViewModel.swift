@@ -77,8 +77,10 @@ final class PlayersViewModel: ObservableObject {
 
     /// Applies a freshly-saved player (from PlayerDetailView) into the
     /// in-memory list so the Dashboard reflects it immediately on return.
+    /// Matched by the stable `id` — never `username`, since a rename means
+    /// the incoming player's username no longer matches its old entry.
     func applyUpdatedPlayer(_ player: Player) {
-        if let index = players.firstIndex(where: { $0.username == player.username }) {
+        if let index = players.firstIndex(where: { $0.id == player.id }) {
             players[index] = player
         } else {
             players.append(player)

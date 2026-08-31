@@ -3,12 +3,18 @@
 //  DemonicSlotsAdmin
 //
 //  Codable model for a Demonic Slots player, as returned by
-//  GET /api/admin/players and /api/admin/players/:username.
+//  GET /api/admin/players and /api/admin/players/:id.
+//
+//  `id` is the stable, immutable identifier the backend assigns to every
+//  player; `username` is just a mutable label on top of it and can be
+//  renamed. All per-player requests must address a player by `id`, never
+//  by `username`.
 //
 
 import Foundation
 
 struct Player: Codable, Identifiable, Equatable, Hashable {
+    let id: String
     let username: String
     let coinBalance: Int
     /// Raw ISO-8601 string as received from the server, kept around so a
@@ -18,12 +24,11 @@ struct Player: Codable, Identifiable, Equatable, Hashable {
     let updatedAtRaw: String?
     let adminRevision: Int?
 
-    var id: String { username }
-
     var createdAt: Date? { DemonicDateParser.parse(createdAtRaw) }
     var updatedAt: Date? { DemonicDateParser.parse(updatedAtRaw) }
 
     private enum CodingKeys: String, CodingKey {
+        case id
         case username
         case coinBalance
         case createdAtRaw = "createdAt"
@@ -32,12 +37,14 @@ struct Player: Codable, Identifiable, Equatable, Hashable {
     }
 
     init(
+        id: String = UUID().uuidString,
         username: String,
         coinBalance: Int,
         createdAtRaw: String? = nil,
         updatedAtRaw: String? = nil,
         adminRevision: Int? = nil
     ) {
+        self.id = id
         self.username = username
         self.coinBalance = coinBalance
         self.createdAtRaw = createdAtRaw
@@ -47,10 +54,12 @@ struct Player: Codable, Identifiable, Equatable, Hashable {
 
     /// Custom decoding so that missing *or malformed* optional metadata
     /// (createdAt/updatedAt/adminRevision) never causes the whole player —
-    /// or the whole players list — to fail to decode. Only `username` and
-    /// `coinBalance` are required.
+    /// or the whole players list — to fail to decode. `id`, `username`,
+    /// and `coinBalance` are required; a player without a stable `id`
+    /// can't be addressed for balance/rename requests at all.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
         username = try container.decode(String.self, forKey: .username)
         coinBalance = try container.decode(Int.self, forKey: .coinBalance)
         createdAtRaw = try? container.decodeIfPresent(String.self, forKey: .createdAtRaw)
