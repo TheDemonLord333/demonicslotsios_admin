@@ -61,11 +61,16 @@ final class PlayerDetailViewModel: ObservableObject {
         pendingConfirmation = nil
     }
 
-    /// Step 2: user tapped "Ändern" in the confirmation dialog. Returns
-    /// `true` on success so the caller can trigger haptic feedback.
+    /// Step 2: user tapped "Ändern" in the confirmation dialog. `pending`
+    /// is passed in explicitly (captured by the caller at the moment the
+    /// dialog's actions were built) rather than re-read from
+    /// `pendingConfirmation` here: SwiftUI clears `isPresented` — and thus
+    /// `pendingConfirmation`, via `cancelConfirmation()` — as soon as any
+    /// dialog button is tapped, which can race ahead of this `async` call
+    /// and would otherwise find it already `nil`. Returns `true` on
+    /// success so the caller can trigger haptic feedback.
     @discardableResult
-    func confirmSave() async -> Bool {
-        guard let pending = pendingConfirmation else { return false }
+    func confirmSave(_ pending: PendingChange) async -> Bool {
         pendingConfirmation = nil
         return await save(newBalance: pending.newBalance)
     }

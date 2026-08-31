@@ -46,11 +46,18 @@ struct PlayerDetailView: View {
             isPresented: confirmationBinding,
             titleVisibility: .visible
         ) {
-            Button("Ändern") {
-                Task {
-                    let success = await viewModel.confirmSave()
-                    if success {
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // Captured here (while the dialog is actually presented) so the
+            // button's action below doesn't depend on `pendingConfirmation`
+            // still being set once its Task actually runs — SwiftUI clears
+            // it via `confirmationBinding`'s `set` as soon as any dialog
+            // button is tapped, which can otherwise race ahead of the save.
+            if let pending = viewModel.pendingConfirmation {
+                Button("Ändern") {
+                    Task {
+                        let success = await viewModel.confirmSave(pending)
+                        if success {
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        }
                     }
                 }
             }
