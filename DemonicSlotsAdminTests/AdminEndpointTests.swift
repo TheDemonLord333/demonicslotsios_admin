@@ -18,12 +18,12 @@ struct AdminEndpointTests {
         #expect(AdminEndpoint.player(id: "abc-123").path == "/api/admin/players/abc-123")
     }
 
-    @Test func updateBalancePathAppendsBalanceSuffix() {
-        #expect(AdminEndpoint.updateBalance(id: "abc-123").path == "/api/admin/players/abc-123/balance")
-    }
-
-    @Test func renameUsernamePathAppendsUsernameSuffix() {
-        #expect(AdminEndpoint.renameUsername(id: "abc-123").path == "/api/admin/players/abc-123/username")
+    @Test func updatePlayerSharesThePlayerResourcePath() {
+        // The consolidated PATCH is the same resource as GET, only the
+        // HTTP method differs — there's no separate /balance or /username
+        // suffix anymore.
+        #expect(AdminEndpoint.updatePlayer(id: "abc-123").path == "/api/admin/players/abc-123")
+        #expect(AdminEndpoint.updatePlayer(id: "abc-123").path == AdminEndpoint.player(id: "abc-123").path)
     }
 
     @Test func playerPathEncodesSpaces() {
@@ -45,7 +45,6 @@ struct AdminEndpointTests {
     @Test func httpMethods() {
         #expect(AdminEndpoint.players.httpMethod == "GET")
         #expect(AdminEndpoint.player(id: "x").httpMethod == "GET")
-        #expect(AdminEndpoint.updateBalance(id: "x").httpMethod == "PATCH")
-        #expect(AdminEndpoint.renameUsername(id: "x").httpMethod == "PATCH")
+        #expect(AdminEndpoint.updatePlayer(id: "x").httpMethod == "PATCH")
     }
 }

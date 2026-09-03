@@ -12,19 +12,17 @@ import Foundation
 enum AdminEndpoint: Equatable {
     case players
     case player(id: String)
-    case updateBalance(id: String)
-    case renameUsername(id: String)
+    /// Same resource as `.player(id:)` — the backend consolidated balance/
+    /// username/level/multiplier/jackpot updates into one
+    /// `PATCH /api/admin/players/:id`, so only the HTTP method differs.
+    case updatePlayer(id: String)
 
     var path: String {
         switch self {
         case .players:
             return "/api/admin/players"
-        case .player(let id):
+        case .player(let id), .updatePlayer(let id):
             return "/api/admin/players/\(PathEncoding.encodeComponent(id))"
-        case .updateBalance(let id):
-            return "/api/admin/players/\(PathEncoding.encodeComponent(id))/balance"
-        case .renameUsername(let id):
-            return "/api/admin/players/\(PathEncoding.encodeComponent(id))/username"
         }
     }
 
@@ -32,7 +30,7 @@ enum AdminEndpoint: Equatable {
         switch self {
         case .players, .player:
             return "GET"
-        case .updateBalance, .renameUsername:
+        case .updatePlayer:
             return "PATCH"
         }
     }

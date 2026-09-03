@@ -48,7 +48,7 @@ struct APIClientErrorMappingTests {
         let body = #"{"error":"invalid_username"}"#.data(using: .utf8)!
         let client = makeClient(status: 400, body: body)
         do {
-            _ = try await client.renameUsername(id: "player-1", newUsername: "!!")
+            _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields(username: "!!"))
             Issue.record("Expected error to be thrown")
         } catch let error as APIError {
             #expect(error == .validation(message: "Ungültiger Username (3–20 Zeichen: Buchstaben, Zahlen, „_“)."))
@@ -59,10 +59,54 @@ struct APIClientErrorMappingTests {
         let body = #"{"error":"invalid_balance"}"#.data(using: .utf8)!
         let client = makeClient(status: 400, body: body)
         do {
-            _ = try await client.updateBalance(id: "player-1", balance: -1)
+            _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields(balance: -1))
             Issue.record("Expected error to be thrown")
         } catch let error as APIError {
             #expect(error == .validation(message: "Ungültiges Guthaben."))
+        }
+    }
+
+    @Test func status400WithInvalidLevelMapsToFriendlyMessage() async throws {
+        let body = #"{"error":"invalid_level"}"#.data(using: .utf8)!
+        let client = makeClient(status: 400, body: body)
+        do {
+            _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields(level: 999))
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            #expect(error == .validation(message: "Ungültiges Level (1–100)."))
+        }
+    }
+
+    @Test func status400WithInvalidMultiplierMapsToFriendlyMessage() async throws {
+        let body = #"{"error":"invalid_win_chance_multiplier"}"#.data(using: .utf8)!
+        let client = makeClient(status: 400, body: body)
+        do {
+            _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields(winChanceMultiplier: 99))
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            #expect(error == .validation(message: "Ungültiger Wahrscheinlichkeits-Multiplikator (0,10–2,00)."))
+        }
+    }
+
+    @Test func status400WithInvalidJackpotMapsToFriendlyMessage() async throws {
+        let body = #"{"error":"invalid_guaranteed_jackpot"}"#.data(using: .utf8)!
+        let client = makeClient(status: 400, body: body)
+        do {
+            _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields(guaranteedJackpot: true))
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            #expect(error == .validation(message: "Ungültiger Wert für den garantierten Jackpot."))
+        }
+    }
+
+    @Test func status400WithNoFieldsToUpdateMapsToFriendlyMessage() async throws {
+        let body = #"{"error":"no_fields_to_update"}"#.data(using: .utf8)!
+        let client = makeClient(status: 400, body: body)
+        do {
+            _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields())
+            Issue.record("Expected error to be thrown")
+        } catch let error as APIError {
+            #expect(error == .validation(message: "Keine Änderung zum Speichern."))
         }
     }
 
@@ -70,7 +114,7 @@ struct APIClientErrorMappingTests {
         let body = #"{"error":"username_taken"}"#.data(using: .utf8)!
         let client = makeClient(status: 409, body: body)
         do {
-            _ = try await client.renameUsername(id: "player-1", newUsername: "Taken")
+            _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields(username: "Taken"))
             Issue.record("Expected error to be thrown")
         } catch let error as APIError {
             #expect(error == .validation(message: "Dieser Username ist bereits vergeben."))

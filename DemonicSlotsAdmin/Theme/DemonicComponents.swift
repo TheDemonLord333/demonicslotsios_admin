@@ -85,3 +85,29 @@ extension View {
         modifier(DemonicFieldBackground(isFocused: isFocused))
     }
 }
+
+// MARK: - Stepper chrome
+
+private struct DemonicStepperChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .tint(DemonicPalette.glowingViolet)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(DemonicPalette.darkVioletElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(DemonicPalette.borderSubtle, lineWidth: 1)
+            )
+    }
+}
+
+extension View {
+    /// Same background/border as `demonicField`, sized for a `Stepper`.
+    func demonicStepperChrome() -> some View {
+        modifier(DemonicStepperChrome())
+    }
+}

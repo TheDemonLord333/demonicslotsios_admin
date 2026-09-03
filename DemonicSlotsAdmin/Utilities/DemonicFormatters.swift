@@ -18,6 +18,15 @@ enum DemonicFormatters {
         return formatter
     }()
 
+    private static let multiplierFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "de_DE")
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
     private static let dateTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "de_DE")
@@ -29,6 +38,12 @@ enum DemonicFormatters {
     /// e.g. 1000 -> "1.000"
     static func formatCoins(_ value: Int) -> String {
         coinNumberFormatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
+    /// e.g. 1.0 -> "1,00" (caller appends "×"). Always exactly two
+    /// fraction digits, matching the web app's multiplier formatter.
+    static func formatMultiplier(_ value: Double) -> String {
+        multiplierFormatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
     }
 
     /// Formats a parsed date in German medium/short style. Falls back to the

@@ -21,6 +21,10 @@ struct APIClientTests {
         )
     }
 
+    private static let fullPlayerJSON = """
+    {"id":"p-1","username":"john","coinBalance":10,"level":5,"winChanceMultiplier":1.25,"guaranteedJackpot":false,"adminRevision":1}
+    """
+
     @Test func fetchPlayersHitsExpectedURLAndAuthHeader() async throws {
         let client = makeClient { request in
             #expect(request.url?.absoluteString == "https://demonicslots.example.com/api/admin/players")
@@ -38,7 +42,7 @@ struct APIClientTests {
     @Test func fetchPlayerEncodesIdInRequestURL() async throws {
         let client = makeClient { request in
             #expect(request.url?.absoluteString.hasSuffix("/api/admin/players/id%20with%20space") == true)
-            let json = #"{"id":"id with space","username":"john","coinBalance":10,"adminRevision":1}"#.data(using: .utf8)!
+            let json = #"{"id":"id with space","username":"john","coinBalance":10,"level":1,"winChanceMultiplier":1.0,"guaranteedJackpot":false,"adminRevision":1}"#.data(using: .utf8)!
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, json)
         }
@@ -48,38 +52,58 @@ struct APIClientTests {
         #expect(player.id == "id with space")
     }
 
-    @Test func updateBalanceSendsPatchWithBalanceBody() async throws {
+    @Test func updatePlayerSendsPatchToPlayerResource() async throws {
         let client = makeClient { request in
             #expect(request.httpMethod == "PATCH")
-            #expect(request.url?.absoluteString.hasSuffix("/api/admin/players/player-1/balance") == true)
-            let body = try #require(request.httpBody)
-            let json = try JSONSerialization.jsonObject(with: body) as? [String: Int]
-            #expect(json?["balance"] == 2500)
-            let responseJSON = #"{"id":"player-1","username":"Bob","coinBalance":2500,"adminRevision":2}"#.data(using: .utf8)!
+            #expect(request.url?.absoluteString.hasSuffix("/api/admin/players/player-1") == true)
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON)
+            return (response, Self.fullPlayerJSON.data(using: .utf8)!)
         }
 
-        let player = try await client.updateBalance(id: "player-1", balance: 2500)
-        #expect(player.coinBalance == 2500)
-        #expect(player.adminRevision == 2)
+        let fields = PlayerUpdateFields(balance: 2500)
+        let player = try await client.updatePlayer(id: "player-1", fields: fields)
+        #expect(player.id == "p-1")
     }
 
-    @Test func renameUsernameSendsPatchWithUsernameBody() async throws {
+    @Test func updatePlayerBodyOnlyIncludesFieldsThatWereSet() async throws {
         let client = makeClient { request in
-            #expect(request.httpMethod == "PATCH")
-            #expect(request.url?.absoluteString.hasSuffix("/api/admin/players/player-1/username") == true)
             let body = try #require(request.httpBody)
-            let json = try JSONSerialization.jsonObject(with: body) as? [String: String]
-            #expect(json?["username"] == "NewName")
-            let responseJSON = #"{"id":"player-1","username":"NewName","coinBalance":500,"adminRevision":3}"#.data(using: .utf8)!
+            let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            // Only `balance` was set on the fields struct — username, level,
+            // winChanceMultiplier, and guaranteedJackpot must be entirely
+            // absent from the encoded body, not present as `null`.
+            #expect(json?.count == 1)
+            #expect(json?["balance"] as? Int == 2500)
+            #expect(json?["username"] == nil)
+            #expect(json?["level"] == nil)
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON)
+            return (response, Self.fullPlayerJSON.data(using: .utf8)!)
         }
 
-        let player = try await client.renameUsername(id: "player-1", newUsername: "NewName")
-        #expect(player.username == "NewName")
-        #expect(player.coinBalance == 500)
+        _ = try await client.updatePlayer(id: "player-1", fields: PlayerUpdateFields(balance: 2500))
+    }
+
+    @Test func updatePlayerBodyIncludesAllProvidedFields() async throws {
+        let client = makeClient { request in
+            let body = try #require(request.httpBody)
+            let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            #expect(json?["username"] as? String == "NewName")
+            #expect(json?["balance"] as? Int == 500)
+            #expect(json?["level"] as? Int == 10)
+            #expect((json?["winChanceMultiplier"] as? NSNumber)?.doubleValue == 1.5)
+            #expect(json?["guaranteedJackpot"] as? Bool == true)
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Self.fullPlayerJSON.data(using: .utf8)!)
+        }
+
+        let fields = PlayerUpdateFields(
+            username: "NewName",
+            balance: 500,
+            level: 10,
+            winChanceMultiplier: 1.5,
+            guaranteedJackpot: true
+        )
+        _ = try await client.updatePlayer(id: "player-1", fields: fields)
     }
 
     @Test func invalidJSONBodyMapsToDecodingError() async throws {

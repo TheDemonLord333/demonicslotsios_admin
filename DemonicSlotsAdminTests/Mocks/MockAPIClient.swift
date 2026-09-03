@@ -12,14 +12,11 @@ import Foundation
 @MainActor
 final class MockAPIClient: AdminAPIClientProtocol {
     var playersResult: Result<[Player], Error> = .success([])
-    var updateBalanceResult: Result<Player, Error>?
-    var renameUsernameResult: Result<Player, Error>?
+    var updatePlayerResult: Result<Player, Error>?
 
     private(set) var fetchPlayersCallCount = 0
-    private(set) var lastUpdateBalanceId: String?
-    private(set) var lastUpdateBalanceValue: Int?
-    private(set) var lastRenameId: String?
-    private(set) var lastRenameUsername: String?
+    private(set) var lastUpdatePlayerId: String?
+    private(set) var lastUpdatePlayerFields: PlayerUpdateFields?
 
     func fetchPlayers() async throws -> [Player] {
         fetchPlayersCallCount += 1
@@ -34,21 +31,12 @@ final class MockAPIClient: AdminAPIClientProtocol {
         return player
     }
 
-    func updateBalance(id: String, balance: Int) async throws -> Player {
-        lastUpdateBalanceId = id
-        lastUpdateBalanceValue = balance
-        guard let updateBalanceResult else {
+    func updatePlayer(id: String, fields: PlayerUpdateFields) async throws -> Player {
+        lastUpdatePlayerId = id
+        lastUpdatePlayerFields = fields
+        guard let updatePlayerResult else {
             throw APIError.playerNotFound
         }
-        return try updateBalanceResult.get()
-    }
-
-    func renameUsername(id: String, newUsername: String) async throws -> Player {
-        lastRenameId = id
-        lastRenameUsername = newUsername
-        guard let renameUsernameResult else {
-            throw APIError.playerNotFound
-        }
-        return try renameUsernameResult.get()
+        return try updatePlayerResult.get()
     }
 }

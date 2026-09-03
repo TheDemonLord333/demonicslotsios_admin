@@ -16,8 +16,7 @@ import Foundation
 protocol AdminAPIClientProtocol {
     func fetchPlayers() async throws -> [Player]
     func fetchPlayer(id: String) async throws -> Player
-    func updateBalance(id: String, balance: Int) async throws -> Player
-    func renameUsername(id: String, newUsername: String) async throws -> Player
+    func updatePlayer(id: String, fields: PlayerUpdateFields) async throws -> Player
 }
 
 @MainActor
@@ -44,14 +43,16 @@ final class APIClient: AdminAPIClientProtocol {
         try await send(.player(id: id), body: Optional<Data>.none)
     }
 
-    func updateBalance(id: String, balance: Int) async throws -> Player {
-        let payload = try JSONEncoder().encode(["balance": balance])
-        return try await send(.updateBalance(id: id), body: payload)
-    }
-
-    func renameUsername(id: String, newUsername: String) async throws -> Player {
-        let payload = try JSONEncoder().encode(["username": newUsername])
-        return try await send(.renameUsername(id: id), body: payload)
+    /// One PATCH covering every admin-editable field: `fields` should
+    /// contain only the ones that actually changed (any non-empty subset
+    /// of username/balance/level/winChanceMultiplier/guaranteedJackpot).
+    /// A rename and a balance/level/multiplier/jackpot change made in the
+    /// same edit go out as a single request, so there's no risk of one
+    /// part succeeding while another targets a since-renamed player under
+    /// a stale reference.
+    func updatePlayer(id: String, fields: PlayerUpdateFields) async throws -> Player {
+        let payload = try JSONEncoder().encode(fields)
+        return try await send(.updatePlayer(id: id), body: payload)
     }
 
     // MARK: - Request plumbing
@@ -94,6 +95,10 @@ final class APIClient: AdminAPIClientProtocol {
         "invalid_username": "Ungültiger Username (3–20 Zeichen: Buchstaben, Zahlen, „_“).",
         "username_taken": "Dieser Username ist bereits vergeben.",
         "invalid_balance": "Ungültiges Guthaben.",
+        "invalid_level": "Ungültiges Level (1–100).",
+        "invalid_win_chance_multiplier": "Ungültiger Wahrscheinlichkeits-Multiplikator (0,10–2,00).",
+        "invalid_guaranteed_jackpot": "Ungültiger Wert für den garantierten Jackpot.",
+        "no_fields_to_update": "Keine Änderung zum Speichern.",
     ]
 
     private static func validate(status: Int, data: Data) throws {
